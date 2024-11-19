@@ -1,0 +1,623 @@
+<html>
+    <head>
+        <base href="." />
+        <meta charset="UTF-8" />
+        <title>Memory Card Game</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                font-family: Arial, sans-serif;
+            }
+
+            .game-container {
+                text-align: center;
+                position: relative;
+            }
+
+            .game-board {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                margin: 20px;
+                perspective: 1000px;
+                grid-template-rows: repeat(4, 100px);
+            }
+
+            .card {
+                width: 100px;
+                height: 100px;
+                position: relative;
+                transform-style: preserve-3d;
+                transition: transform 0.5s, opacity 0.5s;
+                cursor: pointer;
+            }
+
+            .card.flipped {
+                transform: rotateY(180deg);
+            }
+
+            .card-face {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                backface-visibility: hidden;
+                border-radius: 8px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-size: 1.5em;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            }
+
+            .card-front {
+                background: white;
+                transform: rotateY(180deg);
+                display: flex;
+                flex-direction: column;
+                padding: 8px;
+            }
+
+            .card-front img {
+                width: 100%;
+                height: auto;
+                object-fit: contain;
+            }
+
+            .card-back {
+                background: #2a5298;
+            }
+
+            .card-back img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                border-radius: 6px;
+                filter: invert(1);
+            }
+
+            .hearts-container {
+                display: flex;
+                justify-content: center;
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+
+            .heart {
+                width: 25px;
+                height: 25px;
+                position: relative;
+                animation: pulse 1s infinite;
+            }
+
+            .heart::before,
+            .heart::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                width: 15px;
+                height: 25px;
+                border-radius: 15px 15px 0 0;
+                background-color: #ff0000;
+            }
+
+            .heart::before {
+                left: 15px;
+                transform: rotate(-45deg);
+                transform-origin: 0 100%;
+            }
+
+            .heart::after {
+                left: 0;
+                transform: rotate(45deg);
+                transform-origin: 100% 100%;
+            }
+
+            .heart.empty::before,
+            .heart.empty::after {
+                background-color: #333;
+            }
+
+            @keyframes pulse {
+                0% {
+                    transform: scale(1);
+                }
+
+                50% {
+                    transform: scale(1.1);
+                }
+
+                100% {
+                    transform: scale(1);
+                }
+            }
+
+            .game-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            }
+
+            .overlay-content {
+                background: rgba(255, 255, 255, 0.1);
+                padding: 40px;
+                border-radius: 15px;
+                text-align: center;
+                backdrop-filter: blur(5px);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .win-message,
+            .lose-message {
+                display: none;
+                color: #2ecc71;
+                font-size: 2em;
+                margin-bottom: 30px;
+                animation: bounce 0.5s infinite alternate;
+            }
+
+            .lose-message {
+                color: #e74c3c;
+            }
+
+            .retry-button {
+                padding: 15px 30px;
+                font-size: 1.2em;
+                background-color: #2ecc71;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                transition: background-color 0.3s;
+                display: none;
+                margin: 0 auto;
+            }
+
+            .retry-button:hover {
+                background-color: #27ae60;
+            }
+
+            @keyframes bounce {
+                from {
+                    transform: translateY(0);
+                }
+
+                50% {
+                    transform: translateY(-10px);
+                }
+
+                100% {
+                    transform: translateY(0);
+                }
+            }
+
+            /* Update the pair animation styles */
+            .pair-animation {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                z-index: 1001;
+                text-align: center;
+                width: 100%;
+                display: none;
+            }
+
+            .pair-text {
+                color: #00b4ff;
+                font-size: 2.5em;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+                margin-bottom: 20px;
+                animation: pairTextAnimation 1s ease-in-out;
+            }
+
+            .pair-cards-container {
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+            }
+
+            .pair-card {
+                position: absolute;
+                animation: glideToCenter 1s ease-in-out forwards;
+            }
+
+            .pair-card.left {
+                animation: glideFromLeft 1s ease-in-out forwards;
+            }
+
+            .pair-card.right {
+                animation: glideFromRight 1s ease-in-out forwards;
+            }
+
+            @keyframes pairTextAnimation {
+                0% {
+                    transform: scale(0);
+                    opacity: 0;
+                }
+
+                50% {
+                    transform: scale(1.2);
+                    opacity: 1;
+                }
+
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+
+            @keyframes glideFromLeft {
+                0% {
+                    transform: translate(-50vw, 0) scale(1);
+                    opacity: 0;
+                }
+
+                100% {
+                    transform: translate(0, 0) scale(1.5);
+                    opacity: 1;
+                }
+            }
+
+            @keyframes glideFromRight {
+                0% {
+                    transform: translate(50vw, 0) scale(1);
+                    opacity: 0;
+                }
+
+                100% {
+                    transform: translate(0, 0) scale(1.5);
+                    opacity: 1;
+                }
+            }
+
+            @keyframes glideToCenter {
+                0% {
+                    transform: translateX(20px) scale(1);
+                    opacity: 0;
+                }
+
+                100% {
+                    transform: translateX(0) scale(1.2);
+                    opacity: 1;
+                }
+            }
+
+            @keyframes shake {
+
+                0%,
+                100% {
+                    transform: translateX(0) rotateY(180deg);
+                }
+
+                20% {
+                    transform: translateX(-13px) rotateY(180deg);
+                }
+
+                40% {
+                    transform: translateX(13px) rotateY(180deg);
+                }
+
+                60% {
+                    transform: translateX(-8px) rotateY(180deg);
+                }
+
+                80% {
+                    transform: translateX(8px) rotateY(180deg);
+                }
+            }
+
+            .card.shake {
+                animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+            }
+
+            @keyframes moveToMatchedPile {
+                0% {
+                    transform: rotateY(180deg) translate(0, 0) scale(1);
+                    opacity: 1;
+                }
+
+                100% {
+                    transform: rotateY(180deg) translate(calc(-1 * (var(--card-x) - 20px)), calc(100vh - var(--card-y) - 120px)) scale(0.8);
+                    opacity: 0;
+                }
+            }
+
+            /* Add this to the existing CSS, before the last closing curly brace */
+
+            @keyframes shake {
+
+                0%,
+                100% {
+                    transform: translateX(0) rotateY(180deg);
+                }
+
+                20% {
+                    transform: translateX(-13px) rotateY(180deg);
+                }
+
+                40% {
+                    transform: translateX(13px) rotateY(180deg);
+                }
+
+                60% {
+                    transform: translateX(-8px) rotateY(180deg);
+                }
+
+                80% {
+                    transform: translateX(8px) rotateY(180deg);
+                }
+            }
+
+            .card.shake {
+                animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+            }
+
+            /* Add these styles */
+            .matched-pile {
+                position: fixed;
+                left: 20px;
+                bottom: 20px;
+                width: 100px;
+                height: 100px;
+                perspective: 1000px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="game-container">
+            <div class="hearts-container" id="heartsContainer"></div>
+            <div class="game-board" id="gameBoard"></div>
+        </div>
+
+        <div class="pair-animation" id="pairAnimation">
+            <div class="pair-text">It's a pair!</div>
+            <div class="pair-cards-container" id="pairCardsContainer"></div>
+        </div>
+
+        <div class="game-overlay" id="gameOverlay">
+            <div class="overlay-content">
+                <div class="win-message" id="winMessage">Congratulations! You Won! 🎉</div>
+                <div class="lose-message" id="loseMessage">Game Over! Try Again! 😢</div>
+                <button class="retry-button" id="retryButton">Play Again</button>
+            </div>
+        </div>
+
+        <div class="matched-pile" id="matchedPile"></div>
+
+        <script>
+            const logos = [
+                '2.png', // React
+                '3.png', // Vue
+                '4.png', // JavaScript
+                '5.png', // TypeScript
+                '6.png', // Angular
+                '7.png', // HTML5
+                '8.png', // CSS
+                '9.png'  // PHP
+            ];
+
+            const gameBoard = document.getElementById('gameBoard');
+            const heartsContainer = document.getElementById('heartsContainer');
+            const winMessage = document.getElementById('winMessage');
+            const loseMessage = document.getElementById('loseMessage');
+            const retryButton = document.getElementById('retryButton');
+            const gameOverlay = document.getElementById('gameOverlay');
+
+            let cards = [...logos, ...logos];
+            let flippedCards = [];
+            let matchedPairs = 0;
+            let canFlip = true;
+            let lives = 6;
+
+            function updateHearts() {
+                heartsContainer.innerHTML = '';
+                for (let i = 0; i < 6; i++) {
+                    const heart = document.createElement('div');
+                    heart.className = `heart ${i >= lives ? 'empty' : ''}`;
+                    heartsContainer.appendChild(heart);
+                }
+            }
+
+            function shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            function showGameOver(won) {
+                gameOverlay.style.display = 'flex';
+                retryButton.style.display = 'block';
+                if (won) {
+                    winMessage.style.display = 'block';
+                    loseMessage.style.display = 'none';
+                } else {
+                    winMessage.style.display = 'none';
+                    loseMessage.style.display = 'block';
+                }
+            }
+
+            function resetGame() {
+                lives = 6;
+                flippedCards = [];
+                matchedPairs = 0;
+                canFlip = true;
+
+                updateHearts();
+                gameOverlay.style.display = 'none';
+                winMessage.style.display = 'none';
+                loseMessage.style.display = 'none';
+                retryButton.style.display = 'none';
+
+                gameBoard.innerHTML = '';
+                createBoard();
+            }
+
+            function createBoard() {
+                shuffle(cards);
+                cards.forEach((logo, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.dataset.index = index;
+                    card.dataset.logo = logo;
+
+                    const frontFace = document.createElement('div');
+                    frontFace.className = 'card-face card-front';
+
+                    const logoImg = document.createElement('img');
+                    logoImg.src = logo;
+                    logoImg.alt = `Programming language logo ${logo.replace('.png', '')}`;
+                    frontFace.appendChild(logoImg);
+
+                    const backFace = document.createElement('div');
+                    backFace.className = 'card-face card-back';
+
+                    const backImg = document.createElement('img');
+                    backImg.src = 'STD  back memory card.png';
+                    backImg.alt = 'Card back design with abstract ribbon-like shapes';
+                    backFace.appendChild(backImg);
+
+                    card.appendChild(frontFace);
+                    card.appendChild(backFace);
+
+                    card.addEventListener('click', flipCard);
+                    gameBoard.appendChild(card);
+                });
+                updateHearts();
+            }
+
+            function flipCard() {
+                if (!canFlip) return;
+                if (this.classList.contains('flipped')) return;
+                if (flippedCards.length === 2) return;
+
+                this.classList.add('flipped');
+                flippedCards.push(this);
+
+                if (flippedCards.length === 2) {
+                    checkMatch();
+                }
+            }
+
+            function checkMatch() {
+                const [card1, card2] = flippedCards;
+                const match = card1.dataset.logo === card2.dataset.logo;
+
+                canFlip = false;
+
+                if (!match) {
+                    // Add shake class to both cards
+                    card1.classList.add('shake');
+                    card2.classList.add('shake');
+
+                    // Remove shake class after animation ends
+                    setTimeout(() => {
+                        card1.classList.remove('shake');
+                        card2.classList.remove('shake');
+                    }, 500);
+
+                    setTimeout(() => {
+                        card1.classList.remove('flipped');
+                        card2.classList.remove('flipped');
+                        lives--;
+                        updateHearts();
+
+                        if (lives === 0) {
+                            showGameOver(false);
+                            canFlip = false;
+                            return;
+                        }
+                        flippedCards = [];
+                        canFlip = true;
+                    }, 1000);
+                } else {
+                    showPairAnimation(card1, card2);
+                    matchedPairs++;
+
+                    // Add position variables for the animation
+                    const rect1 = card1.getBoundingClientRect();
+                    const rect2 = card2.getBoundingClientRect();
+
+                    card1.style.setProperty('--card-x', `${rect1.x}px`);
+                    card1.style.setProperty('--card-y', `${rect1.y}px`);
+                    card2.style.setProperty('--card-x', `${rect2.x}px`);
+                    card2.style.setProperty('--card-y', `${rect2.y}px`);
+
+                    // Add matched animation after the "It's a pair" animation
+                    setTimeout(() => {
+                        card1.classList.add('matched');
+                        card2.classList.add('matched');
+
+                        // Remove cards after animation
+                        setTimeout(() => {
+                            card1.style.opacity = '0';
+                            card2.style.opacity = '0';
+                            card1.style.pointerEvents = 'none';
+                            card2.style.pointerEvents = 'none';
+                        }, 1000);
+                    }, 2000);
+
+                    if (matchedPairs === logos.length) {
+                        setTimeout(() => {
+                            showGameOver(true);
+                        }, 3000);
+                    }
+                    flippedCards = [];
+                    canFlip = true;
+                }
+            }
+
+            function showPairAnimation(card1, card2) {
+                const pairAnimation = document.getElementById('pairAnimation');
+                const pairCardsContainer = document.getElementById('pairCardsContainer');
+
+                // Clear previous cards
+                pairCardsContainer.innerHTML = '';
+
+                // Clone the matched cards
+                const clone1 = card1.cloneNode(true);
+                const clone2 = card2.cloneNode(true);
+
+                // Add animation classes and flipped class to show front face
+                clone1.classList.add('pair-card', 'left', 'flipped');
+                clone2.classList.add('pair-card', 'right', 'flipped');
+
+                // Add them to the animation container
+                pairCardsContainer.appendChild(clone1);
+                pairCardsContainer.appendChild(clone2);
+
+                // Show the animation
+                pairAnimation.style.display = 'block';
+
+                // Hide after animation
+                setTimeout(() => {
+                    pairAnimation.style.display = 'none';
+                }, 2000);
+            }
+
+            retryButton.addEventListener('click', resetGame);
+
+            createBoard();
+        </script>
+    </body>
+</html>

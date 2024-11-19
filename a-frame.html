@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Memory Game in A-Frame</title>
+        <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+        <style>
+            #startBtn,
+            #replayBtn {
+                position: fixed;
+                z-index: 999;
+                padding: 10px 20px;
+                font-size: 18px;
+                background: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            }
+
+            #startBtn:hover,
+            #replayBtn:hover {
+                background: #45a049;
+            }
+
+            #startBtn {
+                top: 20px;
+                left: 20px;
+            }
+
+            #counter {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 999;
+                font-size: 24px;
+                color: white;
+                background: rgba(0, 0, 0, 0.7);
+                padding: 10px;
+                border-radius: 5px;
+                font-family: Arial, sans-serif;
+            }
+
+            #gameOver {
+                display: none;
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 30px;
+                border-radius: 10px;
+                text-align: center;
+                z-index: 1000;
+                font-family: Arial, sans-serif;
+                min-width: 300px;
+            }
+
+            #gameOver h2 {
+                margin: 0 0 20px 0;
+                color: #4CAF50;
+            }
+        </style>
+    </head>
+    <body>
+        <button id="startBtn">Start Game</button>
+        <div id="counter">Errors: 6</div>
+        <div id="gameOver">
+            <h2>Game Over!</h2>
+            <button id="replayBtn">Play Again</button>
+        </div>
+
+        <a-scene cursor="rayOrigin: mouse">
+            <a-assets>
+                <a-mixin id="card-animation" animation__flip="property: rotation; dur: 500; easing: easeOutQuad"></a-mixin>
+            </a-assets>
+
+            <a-entity position="0 1.6 -4">
+                <a-entity id="cardContainer"></a-entity>
+            </a-entity>
+
+            <a-sky color="#1E293B"></a-sky>
+            <a-camera position="0 1.6 0">
+                <a-cursor></a-cursor>
+            </a-camera>
+
+            <!-- Ambient light for better visibility -->
+            <a-light type="ambient" intensity="0.5"></a-light>
+            <!-- Directional light for shadows and depth -->
+            <a-light type="directional" position="1 1 1" intensity="0.8"></a-light>
+        </a-scene>
+
+        <script>
+            const CARD_PAIRS = [
+                { id: 1, image: '2.png' },
+                { id: 2, image: '3.png' },
+                { id: 3, image: '4.png' },
+                { id: 4, image: '5.png' },
+                { id: 5, image: '6.png' },
+                { id: 6, image: '7.png' },
+                { id: 7, image: '8.png' },
+                { id: 8, image: '9.png' }
+            ];
+
+            let errors = 6;
+            let flippedCards = [];
+            let matchedPairs = 0;
+            let gameActive = false;
+            let isAnimating = false;
+
+            function createCard(cardData, position) {
+                const card = document.createElement('a-entity');
+                card.setAttribute('position', position);
+                card.setAttribute('mixin', 'card-animation');
+
+                const cardFront = document.createElement('a-box');
+                cardFront.setAttribute('width', '0.9');
+                cardFront.setAttribute('height', '0.9');
+                cardFront.setAttribute('depth', '0.1');
+                cardFront.setAttribute('material', `color: #64748B; src: url(STD  back memory card.png); metalness: 0.2; roughness: 0.7`);
+                cardFront.setAttribute('shadow', '');
+
+                const cardBack = cardFront.cloneNode(true);
+                cardBack.setAttribute('material', `src: url(${cardData.image}); metalness: 0.2; roughness: 0.7`);
+                cardBack.setAttribute('position', '0 0 -0.001');
+                cardBack.setAttribute('rotation', '0 180 0');
+                cardBack.setAttribute('visible', false);
+                cardBack.setAttribute('shadow', '');
+
+                card.appendChild(cardFront);
+                card.appendChild(cardBack);
+
+                card.setAttribute('data-id', cardData.id);
+                card.setAttribute('data-flipped', 'false');
+
+                // Add hover effect
+                card.addEventListener('mouseenter', () => {
+                    if (!isAnimating && gameActive && card.getAttribute('data-flipped') === 'false') {
+                        cardFront.setAttribute('material', 'color: #64748B');
+                    }
+                });
+
+                card.addEventListener('mouseleave', () => {
+                    if (!isAnimating && gameActive && card.getAttribute('data-flipped') === 'false') {
+                        cardFront.setAttribute('material', 'color: #475569');
+                    }
+                });
+
+                card.addEventListener('click', () => handleCardClick(card));
+
+                return card;
+            }
+
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            function initializeGame() {
+                const container = document.querySelector('#cardContainer');
+                container.innerHTML = '';
+
+                const allCards = [...CARD_PAIRS, ...CARD_PAIRS];
+                const shuffledCards = shuffleArray(allCards);
+
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        const card = createCard(
+                            shuffledCards[i * 4 + j],
+                            `${(j - 1.5) * 1} ${-(i - 1.5) * 1} 0`
+                        );
+                        container.appendChild(card);
+                    }
+                }
+            }
+
+            function handleCardClick(card) {
+                if (!gameActive || isAnimating) return;
+                if (flippedCards.length >= 2) return;
+                if (card.getAttribute('data-flipped') === 'true') return;
+
+                flipCard(card, true);
+                flippedCards.push(card);
+
+                if (flippedCards.length === 2) {
+                    setTimeout(checkMatch, 1000);
+                }
+            }
+
+            function flipCard(card, flipped) {
+                isAnimating = true;
+                card.setAttribute('data-flipped', flipped.toString());
+
+                const front = card.children[0];
+                const back = card.children[1];
+
+                // Set the animation
+                const targetRotation = flipped ? '0 180 0' : '0 0 0';
+                card.setAttribute('animation__flip', `to: ${targetRotation}`);
+
+                // Handle visibility halfway through the animation
+                setTimeout(() => {
+                    front.setAttribute('visible', !flipped);
+                    back.setAttribute('visible', flipped);
+                }, 250);
+
+                // Reset animation flag after animation completes
+                setTimeout(() => {
+                    isAnimating = false;
+                }, 500);
+            }
+
+            function checkMatch() {
+                const [card1, card2] = flippedCards;
+
+                if (card1.getAttribute('data-id') === card2.getAttribute('data-id')) {
+                    setTimeout(() => {
+                        card1.setAttribute('animation', 'property: scale; to: 0 0 0; dur: 300; easing: easeInQuad');
+                        card2.setAttribute('animation', 'property: scale; to: 0 0 0; dur: 300; easing: easeInQuad');
+
+                        setTimeout(() => {
+                            card1.setAttribute('visible', false);
+                            card2.setAttribute('visible', false);
+                        }, 300);
+                    }, 200);
+
+                    matchedPairs++;
+
+                    if (matchedPairs === CARD_PAIRS.length) {
+                        gameWon();
+                    }
+                } else {
+                    flipCard(card1, false);
+                    flipCard(card2, false);
+                    errors--;
+                    updateCounter();
+
+                    if (errors === 0) {
+                        gameOver();
+                    }
+                }
+
+                flippedCards = [];
+            }
+
+            function updateCounter() {
+                document.querySelector('#counter').textContent = `Errors: ${errors}`;
+            }
+
+            function gameOver() {
+                gameActive = false;
+                document.querySelector('#gameOver').style.display = 'block';
+            }
+
+            function gameWon() {
+                gameActive = false;
+                document.querySelector('#gameOver').innerHTML = '<h2>Congratulations! You Won! 🎉</h2><button id="replayBtn">Play Again</button>';
+                document.querySelector('#gameOver').style.display = 'block';
+
+                // Re-attach event listener to new replay button
+                document.querySelector('#replayBtn').addEventListener('click', startGame);
+            }
+
+            function startGame() {
+                errors = 6;
+                matchedPairs = 0;
+                flippedCards = [];
+                gameActive = true;
+                isAnimating = false;
+                document.querySelector('#gameOver').style.display = 'none';
+                updateCounter();
+                initializeGame();
+            }
+
+            document.querySelector('#startBtn').addEventListener('click', startGame);
+            document.querySelector('#replayBtn').addEventListener('click', startGame);
+        </script>
+    </body>
+</html>
